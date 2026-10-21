@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
+import 'dart:async'; // 3.1 importar variable 
 
 class LoginScreen extends StatefulWidget {
-  const new({super.key});
+  const LoginScreen({super.key}); 
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -19,7 +20,40 @@ class _LoginScreenState extends State<LoginScreen> {
   SMIBool? _isHandsUp; // para controlar el estado de la animación
   SMITrigger? _trigSuccess; // para controlar el estado de la animación
   SMITrigger? _trigFail; // para controlar el estado de la animación
-  SMINumber? _numLook; // para controlar el estado de la animación
+  SMINumber? _numLook; // para controlar el estado de la 
+  
+  //3.2 timer para detener el recorrido de la mirada
+  Timer? _typingDebounce;
+  
+  // 2.1 Crear variables para FocusNode
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode(); // focusNode, ciclo de vida de un widget
+
+  // 2.2 Crear los oyentes (listeners)
+  @override
+  void initState() {
+    super.initState();
+    _emailFocus.addListener((){
+      if (_emailFocus.hasFocus){
+        _isHandsUp?.change(false);
+        _isChecking?.change(true); // Activar modo chismoso al tocar
+        //3.3 mirada neutral
+        _numLook?.value = 50.0;
+      } else {
+        _isChecking?.change(false); // Desactivar si pierde el foco
+      }
+    });
+
+    _passwordFocus.addListener((){
+      if (_passwordFocus.hasFocus) {
+        _isChecking?.change(false);
+        //Manos arriba SOLO si la contraseña está oculta
+        _isHandsUp?.change(_isObscure);
+      } else {
+        _isHandsUp?.change(false); // Bajar manos al perder el foco
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 250,
                   child: RiveAnimation.asset(
                     'assets/login-bear-animation.riv',
-                    stateMachines: ['Login Machine'],
+                    stateMachines: const ['Login Machine'],
                     // 1.2 vincular la animacion
                     onInit: (artboard){
                       _controller = StateMachineController.fromArtboard(
@@ -58,19 +92,33 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                 ),
-                  SizedBox(height: 10), // para separar elementos
+                  const SizedBox(height: 10), // para separar elementos
                   //correo
                   TextField(
-                    //1.5 vincular al campo de texto
+                    //2.3 asignar el focus al TextField
+                    focusNode: _emailFocus,
                     onChanged:(value){
-                      if (_isHandsUp != null){
-                        //no tapes los ojos al ver el email
-                        _isHandsUp!.change(false);
-                      }
-                      // si isChecking es null
-                      if (_isChecking == null) return;
-                      //activa el modo chismoso
-                      _isChecking!.change(true);
+                      _isHandsUp?.change(false);
+                      _isChecking?.change(true); //activa el modo chismoso
+
+                      //3.4 Implementar recorrido de mirada
+                      // ajuste de mi límite de 0 a 100
+                      //80 medida de calibración
+                      final look = (value.length / 80.0 * 100.0).clamp(
+                        0.0, 
+                        100.0
+                      );
+                      _numLook?.value = look;
+
+                      // 3.5 Debounce: si vuelve a teclear, reinicia el contador
+                      _typingDebounce?.cancel();
+                      //crear nuevo timer 
+                      _typingDebounce = Timer(const Duration(seconds: 3),(){
+                        //si secierra la pantalla, termina la ejecución
+                        if (!mounted) return;
+                        //mirada neutra
+                        _isChecking?.change(false);
+                      });
                     },
                     decoration: InputDecoration(
                       hintText: "Email",
@@ -86,27 +134,26 @@ class _LoginScreenState extends State<LoginScreen> {
         
                   // contraseña
                   TextField(
-                    //1.5 vincular al campo de texto
+                    focusNode: _passwordFocus,
                     onChanged:(value){
-                      if (_isChecking != null){
-                        //no tapes los ojos al ver el email
-                        _isChecking!.change(false);
-                      }
-                      // si isChecking es null
-                      if (_isHandsUp == null) return;
-                      //activa el modo chismoso
-                      _isHandsUp!.change(true);
+                      _isChecking?.change(false);
+                      _isHandsUp?.change(_isObscure); // Se tapa los ojos si está oculto
                     },
                     obscureText: _isObscure, // para ocultar la contraseña
                     decoration: InputDecoration(
                       hintText: "Password",
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
+                        // --- LÓGICA CORREGIDA AQUÍ ---
                         onPressed: (){
                           //Refrescar el ícono
                           setState(() {
                             _isObscure = !_isObscure;
                           });
+                          // Si estás enfocado en la contraseña, actualiza las manos
+                          if (_passwordFocus.hasFocus) {
+                            _isHandsUp?.change(_isObscure);
+                          }
                         }, 
                         icon: Icon(
                           //if ternario
@@ -125,5 +172,16 @@ class _LoginScreenState extends State<LoginScreen> {
         ,),
       )
     );
+  }
+
+  @override
+  void dispose() {
+    // 2.4 liberar memoria/recurso en los focusNode
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
+    //3.5 liberar timer 
+    _typingDebounce?.cancel();
+    _controller?.dispose();
+    super.dispose();
   }
 }
