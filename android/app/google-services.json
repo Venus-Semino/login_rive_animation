@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "800907130482",
+    "project_id": "flutter-spring-venus",
+    "storage_bucket": "flutter-spring-venus.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:800907130482:android:3bd1740d9637592411b4eb",
+        "android_client_info": {
+          "package_name": "com.example.login_rive_animation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUxrq6gj92A5kFDb5_9sXc7RLjrjYIs6w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
