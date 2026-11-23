@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:rive/rive.dart';
+import 'package:login_rive_animation/widgets/login_robot.dart';
 
 import 'dart:async'; // 3.1 importar variable
 
 import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:login_rive_animation/screens/products_screen.dart';
+import 'package:login_rive_animation/screens/authenticated_screen.dart';
+import 'package:login_rive_animation/screens/signup_screen.dart';
+import 'package:login_rive_animation/widgets/password_reset_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.auth});
+
+  final FirebaseAuth? auth;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -18,15 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   //control para mostrar y ocultar contraseña
   bool _isObscure = true;
 
-  // 1.1 MÁQUINA ESTADOS / cerebro de la animación
-  StateMachineController?
-  _controller; // nullsafety, sirve par evitar que el programma falle (?)
-  //StateMachineInput
-  SMIBool? _isChecking; // para controlar el estado de la animación
-  SMIBool? _isHandsUp; // para controlar el estado de la animación
-  SMITrigger? _trigSuccess; // para controlar el estado de la animación
-  SMITrigger? _trigFail; // para controlar el estado de la animación
-  SMINumber? _numLook; // para controlar el estado de la
+  final _robot = LoginRobotController();
 
   //3.2 timer para detener el recorrido de la mirada
   Timer? _typingDebounce;
@@ -39,112 +35,73 @@ class _LoginScreenState extends State<LoginScreen> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
 
-  //4.2 Errores para mostrar en la UI
-  String? emailError;
-  String? passError;
-  //para que se conecte
   String? loginError;
   bool isLoading = false;
 
-  // 4.3 Validadores
-  bool isValidEmail(String email) {
-    final re = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
-    return re.hasMatch(email);
-  }
-
-  bool isValidPassword(String pass) {
-    // mínimo 8, una mayúscula, una minúscula, un dígito y un especial
-    final re = RegExp(
-      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$',
-    );
-    return re.hasMatch(pass);
-  }
-
-  //4.4 Acción del botón
+  FirebaseAuth get _auth => widget.auth ?? FirebaseAuth.instance;
 
   Future<void> _onLogin() async {
     if (isLoading) return;
-
     final email = emailCtrl.text.trim();
-    final pass = passCtrl.text;
-
-    // Validar el formato con Regex.
-    final emailTypedError = isValidEmail(email) ? null : 'Email inválido';
-
-    final passTypedError = isValidPassword(pass) ? null : 'Contraseña inválida';
-
-    setState(() {
-      emailError = emailTypedError;
-      passError = passTypedError;
-      loginError = null;
-    });
-
-    // Cerrar teclado y regresar el osito a estado neutro.
+    final password = passCtrl.text;
     FocusScope.of(context).unfocus();
     _typingDebounce?.cancel();
-    _isChecking?.change(false);
-    _isHandsUp?.change(false);
-    _numLook?.value = 50.0;
+    _robot.reset();
 
-    // Si el formato es incorrecto, no consultar Firebase.
-    if (emailTypedError != null || passTypedError != null) {
-      _trigFail?.fire();
+    // Login only checks presence. Firebase validates the credentials.
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => loginError = 'Completa el correo y la contraseña.');
       return;
     }
-
     setState(() {
       isLoading = true;
+      loginError = null;
     });
-
     try {
-      // Comprobar las credenciales reales en Firebase.
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: pass,
-      );
-
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
+    } catch (_) {
       if (!mounted) return;
-
-      // Firebase confirmó que las credenciales son correctas.
-      _trigSuccess?.fire();
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Inicio de sesión exitoso')));
-
-      // Dar tiempo a que el osito muestre la animación de éxito.
-      await Future.delayed(const Duration(milliseconds: 1200));
-
-      if (!mounted) return;
-
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (context) => const ProductsScreen()));
-
-      // Después conectaremos aquí la pantalla de productos.
-    } on FirebaseAuthException {
-      if (!mounted) return;
-
       setState(() {
-        loginError = 'Correo o contraseña incorrectos';
+        isLoading = false;
+        loginError = 'Credenciales inválidas';
       });
-
-      _trigFail?.fire();
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        loginError = 'No se pudo iniciar sesión. Intenta de nuevo.';
-      });
-
-      _trigFail?.fire();
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      _robot.fail();
+      return;
     }
+    if (!mounted) return;
+    _robot.succeed();
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => AuthenticatedScreen(auth: widget.auth),
+      ),
+    );
+  }
+
+  Future<void> _openSignUp() async {
+    if (isLoading) return;
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => SignUpScreen(auth: widget.auth)),
+    );
+    if (!mounted || created != true) return;
+    setState(() => loginError = null);
+    passCtrl.clear();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Registro exitoso. Inicia sesión para continuar.'),
+      ),
+    );
+  }
+
+  Future<void> _forgotPassword() async {
+    if (isLoading) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          PasswordResetDialog(auth: _auth, initialEmail: emailCtrl.text.trim()),
+    );
   }
 
   // 2.2 Crear los oyentes (listeners)
@@ -152,23 +109,19 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _emailFocus.addListener(() {
+      _typingDebounce?.cancel();
       if (_emailFocus.hasFocus) {
-        _isHandsUp?.change(false);
-        _isChecking?.change(true); // Activar modo chismoso al tocar
-        //3.3 mirada neutral
-        _numLook?.value = 50.0;
+        _robot.focusEmail();
       } else {
-        _isChecking?.change(false); // Desactivar si pierde el foco
+        _robot.clearFocus();
       }
     });
-
     _passwordFocus.addListener(() {
+      _typingDebounce?.cancel();
       if (_passwordFocus.hasFocus) {
-        _isChecking?.change(false);
-        //Manos arriba SOLO si la contraseña está oculta
-        _isHandsUp?.change(_isObscure);
+        _robot.focusPassword(hidden: _isObscure);
       } else {
-        _isHandsUp?.change(false); // Bajar manos al perder el foco
+        _robot.clearFocus();
       }
     });
   }
@@ -188,61 +141,28 @@ class _LoginScreenState extends State<LoginScreen> {
                 SizedBox(
                   width: screenSize.width,
                   height: 250,
-                  child: RiveAnimation.asset(
-                    'assets/login-bear-animation.riv',
-                    stateMachines: const ['Login Machine'],
-                    // 1.2 vincular la animacion
-                    onInit: (artboard) {
-                      _controller = StateMachineController.fromArtboard(
-                        artboard,
-                        'Login Machine',
-                      );
-                      //1.3 verificar que inicio bien
-                      if (_controller == null) return;
-                      // agregar el controlador al escenario
-                      artboard.addController(_controller!);
-                      // 1.4 vincular las variables
-                      _isChecking = _controller!.findSMI('isChecking');
-                      _isHandsUp = _controller!.findSMI('isHandsUp');
-                      _trigSuccess = _controller!.findSMI('trigSuccess');
-                      _trigFail = _controller!.findSMI('trigFail');
-                      _numLook = _controller!.findSMI('numLook');
-                    },
-                  ),
+                  child: LoginRobot(controller: _robot),
                 ),
                 const SizedBox(height: 10), // para separar elementos
                 //correo
                 TextField(
                   //4.8 Vincular el controller
                   controller: emailCtrl,
+                  enabled: !isLoading,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.username],
                   //2.3 asignar el focus al TextField
                   focusNode: _emailFocus,
                   onChanged: (value) {
-                    _isHandsUp?.change(false);
-                    _isChecking?.change(true); //activa el modo chismoso
-
-                    //3.4 Implementar recorrido de mirada
-                    // ajuste de mi límite de 0 a 100
-                    //80 medida de calibración
-                    final look = (value.length / 80.0 * 100.0).clamp(
-                      0.0,
-                      100.0,
-                    );
-                    _numLook?.value = look;
-
-                    // 3.5 Debounce: si vuelve a teclear, reinicia el contador
+                    _robot.trackEmail(value.length);
                     _typingDebounce?.cancel();
-                    //crear nuevo timer
                     _typingDebounce = Timer(const Duration(seconds: 3), () {
-                      //si secierra la pantalla, termina la ejecución
                       if (!mounted) return;
-                      //mirada neutra
-                      _isChecking?.change(false);
+                      _robot.reset();
                     });
                   },
                   decoration: InputDecoration(
                     //4.9 mostrar el error en la UI
-                    errorText: emailError,
                     hintText: "Email",
                     prefixIcon: const Icon(Icons.email),
                     border: OutlineInputBorder(
@@ -257,31 +177,31 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   //4.8 Vincular el controller
                   controller: passCtrl,
+                  enabled: !isLoading,
+                  autofillHints: const [AutofillHints.password],
                   focusNode: _passwordFocus,
-                  onChanged: (value) {
-                    _isChecking?.change(false);
-                    _isHandsUp?.change(
-                      _isObscure,
-                    ); // Se tapa los ojos si está oculto
+                  onChanged: (_) {
+                    _robot.focusPassword(hidden: _isObscure);
                   },
                   obscureText: _isObscure, // para ocultar la contraseña
                   decoration: InputDecoration(
                     //4.9 mostrar el error en la UI
-                    errorText: passError,
                     hintText: "Password",
                     prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       // --- LÓGICA CORREGIDA AQUÍ ---
-                      onPressed: () {
-                        //Refrescar el ícono
-                        setState(() {
-                          _isObscure = !_isObscure;
-                        });
-                        // Si estás enfocado en la contraseña, actualiza las manos
-                        if (_passwordFocus.hasFocus) {
-                          _isHandsUp?.change(_isObscure);
-                        }
-                      },
+                      onPressed: isLoading
+                          ? null
+                          : () {
+                              //Refrescar el ícono
+                              setState(() {
+                                _isObscure = !_isObscure;
+                              });
+                              // Actualizar la señal visual de contraseña oculta.
+                              if (_passwordFocus.hasFocus) {
+                                _robot.focusPassword(hidden: _isObscure);
+                              }
+                            },
                       icon: Icon(
                         //if ternario
                         _isObscure ? Icons.visibility : Icons.visibility_off,
@@ -295,12 +215,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 const SizedBox(height: 10), // para separar elementos
-                SizedBox(
-                  width: screenSize.width,
-                  child: const Text(
-                    "Forgot password?",
-                    textAlign: TextAlign.right,
-                    style: TextStyle(decoration: TextDecoration.underline),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: isLoading ? null : _forgotPassword,
+                    child: const Text('Forgot password?'),
                   ),
                 ),
 
@@ -340,9 +259,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text("Don't have an account?"),
                       const SizedBox(width: 10),
                       TextButton(
-                        onPressed: () {},
+                        onPressed: isLoading ? null : () {},
                         child: Text(
-                          "Register",
+                          "Sign up",
                           style: TextStyle(
                             color: Color.fromARGB(255, 255, 139, 45),
                             fontWeight: FontWeight.bold,
@@ -362,14 +281,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  @override
   void dispose() {
     _typingDebounce?.cancel();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     emailCtrl.dispose();
     passCtrl.dispose();
-    _controller?.dispose();
+    _robot.dispose();
     super.dispose();
   }
 }
