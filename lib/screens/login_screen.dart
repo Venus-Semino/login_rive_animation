@@ -5,6 +5,8 @@ import 'dart:async'; // 3.1 importar variable
 
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:login_rive_animation/screens/products_screen.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -109,6 +111,15 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Inicio de sesión exitoso')));
+
+      // Dar tiempo a que el osito muestre la animación de éxito.
+      await Future.delayed(const Duration(milliseconds: 1200));
+
+      if (!mounted) return;
+
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (context) => const ProductsScreen()));
 
       // Después conectaremos aquí la pantalla de productos.
     } on FirebaseAuthException {
