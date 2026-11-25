@@ -42,8 +42,9 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
     setState(() {
       _loading = false;
       _confirmed = confirmed;
-      if (!confirmed)
+      if (!confirmed) {
         _error = 'No se pudo procesar la solicitud. Intenta nuevamente.';
+      }
     });
   }
 
@@ -73,8 +74,9 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                         ),
                         validator: (value) {
                           final email = (value ?? '').trim();
-                          if (email.isEmpty)
+                          if (email.isEmpty) {
                             return 'Ingresa tu correo electrónico.';
+                          }
                           if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
                               .hasMatch(email)) {
                             return 'Ingresa un correo electrónico válido.';

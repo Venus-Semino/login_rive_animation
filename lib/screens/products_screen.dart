@@ -2,35 +2,63 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/api_service.dart';
+import '../models/videogame.dart';
+import 'login_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
-  const ProductsScreen({super.key});
+  const ProductsScreen({super.key, this.auth, this.apiService});
+
+  final FirebaseAuth? auth;
+  final ApiService? apiService;
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
-  late Future<List<dynamic>> productosFuture;
+  late final ApiService _api;
+  late Future<List<Videogame>> productosFuture;
+  bool _closingSession = false;
 
   @override
   void initState() {
     super.initState();
-    productosFuture = ApiService.obtenerProductos();
+    _api = widget.apiService ?? ApiService(auth: widget.auth);
+    productosFuture = _api.obtenerProductos();
   }
 
   void recargarProductos() {
     setState(() {
-      productosFuture = ApiService.obtenerProductos();
+      productosFuture = _api.obtenerProductos();
     });
   }
 
   Future<void> cerrarSesion() async {
-    await FirebaseAuth.instance.signOut();
-
+    if (_closingSession) return;
+    setState(() => _closingSession = true);
+    try {
+      await (widget.auth ?? FirebaseAuth.instance).signOut();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _closingSession = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo cerrar sesión. Intenta nuevamente.'),
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => LoginScreen(auth: widget.auth)),
+      (_) => false,
+    );
+  }
 
-    Navigator.of(context).pop();
+  @override
+  void dispose() {
+    if (widget.apiService == null) _api.dispose();
+    super.dispose();
   }
 
   @override
@@ -47,12 +75,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: cerrarSesion,
+            onPressed: _closingSession ? null : cerrarSesion,
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
-      body: FutureBuilder<List<dynamic>>(
+      body: FutureBuilder<List<Videogame>>(
         future: productosFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -94,18 +122,20 @@ class _ProductsScreenState extends State<ProductsScreen> {
             padding: const EdgeInsets.all(12),
             itemCount: productos.length,
             itemBuilder: (context, index) {
-              final producto = productos[index] as Map<String, dynamic>;
-
-              final nombre = producto['name']?.toString() ?? 'Sin nombre';
-              final precio = producto['price']?.toString() ?? '0';
-              final stock = producto['stock']?.toString() ?? '0';
+              final producto = productos[index];
+              final nombre = producto.title;
+              final precio = producto.price.toStringAsFixed(2);
+              final stock = producto.stock?.toString() ?? 'No informado';
+              final categoria = producto.category?.trim();
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 10),
                 child: ListTile(
                   leading: const Icon(Icons.inventory_2_outlined),
                   title: Text(nombre),
-                  subtitle: Text('Existencias: $stock'),
+                  subtitle: Text(
+                    'Existencias: $stock\nCategoría: ${categoria == null || categoria.isEmpty ? 'No informada' : categoria}',
+                  ),
                   trailing: Text('\$$precio'),
                 ),
               );

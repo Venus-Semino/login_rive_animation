@@ -169,28 +169,21 @@ void main() {
     },
   );
 
-  testWidgets('Login conserva validaciones antes de consultar Firebase', (
+  testWidgets('Login valida campos completos con un único mensaje global', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
     await loadRobot(tester);
     final fields = find.byType(TextField);
-    await tester.enterText(fields.at(0), 'correo-invalido');
-    await tester.enterText(fields.at(1), 'corta');
+    await tester.enterText(fields.at(0), '');
+    await tester.enterText(fields.at(1), '');
     await tester.ensureVisible(find.byType(MaterialButton));
     await tester.tap(find.byType(MaterialButton));
     await tester.pump();
-    expect(find.text('Email inválido'), findsOneWidget);
-    expect(find.text('Contraseña inválida'), findsOneWidget);
+    expect(find.text('Completa el correo y la contraseña.'), findsOneWidget);
+    expect(find.text('Email inválido'), findsNothing);
+    expect(find.text('Contraseña inválida'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    final board = tester.widget<rive.Rive>(find.byType(rive.Rive)).artboard;
-    expect(
-      board.animationControllers
-          .whereType<rive.OneShotAnimation>()
-          .singleWhere((c) => c.isActive)
-          .animationName,
-      'sad',
-    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 4));

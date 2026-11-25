@@ -168,10 +168,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty)
+                      if (value == null || value.isEmpty) {
                         return 'Confirma tu contraseña.';
-                      if (value != _password.text)
+                      }
+                      if (value != _password.text) {
                         return 'Las contraseñas no coinciden.';
+                      }
                       return null;
                     },
                   ),

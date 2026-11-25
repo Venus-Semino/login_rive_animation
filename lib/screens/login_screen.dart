@@ -5,7 +5,7 @@ import 'dart:async'; // 3.1 importar variable
 
 import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:login_rive_animation/screens/authenticated_screen.dart';
+import 'package:login_rive_animation/screens/products_screen.dart';
 import 'package:login_rive_animation/screens/signup_screen.dart';
 import 'package:login_rive_animation/widgets/password_reset_dialog.dart';
 
@@ -74,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) => AuthenticatedScreen(auth: widget.auth),
+        builder: (_) => ProductsScreen(auth: widget.auth),
       ),
     );
   }
@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text("Don't have an account?"),
                       const SizedBox(width: 10),
                       TextButton(
-                        onPressed: isLoading ? null : () {},
+                        onPressed: isLoading ? null : _openSignUp,
                         child: Text(
                           "Sign up",
                           style: TextStyle(
